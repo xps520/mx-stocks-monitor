@@ -55,6 +55,66 @@ class KeyExpired(RuntimeError):
 # 避免本地与云端（唯一写入方）抢同一份 CSV。
 _NO_PUSH = False
 
+# Server酱推送配置（从环境变量读取，不提交到仓库）
+# export SERVERCHAN_SENDKEY=SCT417948TGafUgmuIzx9UL3fzuVxA41Ra
+SERVERCHAN_SENDKEY = os.environ.get("SERVERCHAN_SENDKEY", "").strip()
+
+# 呆呆面板推送配置（可选，URL 直接写死或从环境变量读）
+# export DADA_PANEL_URL=https://yoursite.com/api/notify
+DADA_PANEL_URL = os.environ.get("DADA_PANEL_URL", "").strip()
+
+# ---------------- 统一推送函数 ----------------
+def _send_notification(title: str, content: str = ""):
+    """Server酱 + 呆呆面板统一推送，失败只打印不抛异常。"""
+    ts = now_shanghai().strftime("%Y-%m-%d %H:%M")
+    text = f"{title}\n\n{content}" if content else title
+
+    # 1) Server酱（sct.qq.com）
+    if SERVERCHAN_SENDKEY:
+        url = f"https://sct.qq.com/send?title={title}&desp={content}&i={ts}"
+        try:
+            httpx.get(url, timeout=10)
+            print(f"[推送] Server酱已发送: {title}")
+        except Exception as e:
+            print(f"[推送] Server酱失败({type(e).__name__}): {e}")
+
+    # 2) 呆呆面板
+    if DADA_PANEL_URL:
+        try:
+            httpx.post(
+                DADA_PANEL_URL,
+                json={"title": title, "content": content, "time": ts},
+                timeout=10,
+            )
+            print(f"[推送] 呆呆面板已发送: {title}")
+        except Exception as e:
+            print(f"[推送] 呆呆面板失败({type(e).__name__}): {e}")
+
+
+def _send_new_stocks_alert(added: list, total: int):
+    """发送新入选股票提醒（当次新增时调用）。"""
+    if not added and not SERVERCHAN_SENDKEY and not DADA_PANEL_URL:
+        return
+    code_list = ", ".join(added) if added else "（本次无新增）"
+    title = f"🈶 妙想选股 {now_shanghai().strftime('%H:%M')} 新入选 {len(added)} 只"
+    content = f"本次新增: {code_list}\n观察池累计: {total} 只"
+    _send_notification(title, content)
+
+
+def _send_t1_alert(code: str, name: str, date: str, close_pct: float,
+                   high_pct: float, low_pct: float, shape: str, strat_ret: str):
+    """发送 T+1 次日表现提醒。"""
+    if not SERVERCHAN_SENDKEY and not DADA_PANEL_URL:
+        return
+    title = f"📊 {name}({code}) T+1 表现 | {date}"
+    content = (
+        f"次日收盘: {close_pct:+.2f}%\n"
+        f"最高/最低: {high_pct:+.2f}% / {low_pct:+.2f}%\n"
+        f"形态: {shape}\n"
+        f"策略收益: {strat_ret}"
+    )
+    _send_notification(title, content)
+
 
 # ---------------- 自带授权（无需外部技能） ----------------
 def _mx_dir() -> Path:
@@ -1030,6 +1090,8 @@ def _scan_once(pool, force):
         return False
     added, updated = _merge_rows(pool, rows, now)
     print(f"[累计] 本次新增 {len(added)}: {added} | 刷新 {len(updated)}: {updated}")
+    if added:
+        _send_new_stocks_alert(added, len(pool))
     return True
 
 
@@ -1463,6 +1525,12 @@ def track_followups(pool, force):
         mid_price = _fetch_mid_price(code, plate, target)  # 11:30 原始价（元）
         shape = _apply_t1(ex, target, prev, live.get("open"), live.get("high"),
                           live.get("low"), live.get("price"), mid_price, "已跟踪")
+        _send_t1_alert(code, ex.get("名称") or code, target.strftime("%Y-%m-%d"),
+                       _num(ex.get("次日_收盘涨跌幅")),
+                       _num(ex.get("次日_最高涨跌幅")),
+                       _num(ex.get("次日_最低涨跌幅")),
+                       shape or "",
+                       ex.get("策略收益_次日收盘(%)") or "")
         if ex["次日_午间涨跌幅"] == "":
             print(f"::warning::T+1 午间价缺失(其余字段正常): {code}")
         changed = True
