@@ -66,12 +66,14 @@ DADA_PANEL_URL = os.environ.get("DADA_PANEL_URL", "").strip()
 # ---------------- 统一推送函数 ----------------
 def _send_notification(title: str, content: str = ""):
     """Server酱 + 呆呆面板统一推送，失败只打印不抛异常。"""
+    from urllib.parse import urlencode
     ts = now_shanghai().strftime("%Y-%m-%d %H:%M")
     text = f"{title}\n\n{content}" if content else title
 
-    # 1) Server酱（sct.qq.com）
+    # 1) Server酱（sctapi.ftqq.com）
     if SERVERCHAN_SENDKEY:
-        url = f"https://sct.qq.com/send?title={title}&desp={content}&i={ts}"
+        url = f"https://sctapi.ftqq.com/{SERVERCHAN_SENDKEY}.send?" + urlencode(
+            {"title": title, "desp": content, "i": ts})
         try:
             httpx.get(url, timeout=10)
             print(f"[推送] Server酱已发送: {title}")
