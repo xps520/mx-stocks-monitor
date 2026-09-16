@@ -15,7 +15,25 @@
 
 > 改条件：编辑 `screener_monitor.py` 顶部的 `QUERY` 一处即可，监控与定时任务都会跟着变。
 
-## 云端自动运行（主力，无需本机开机）
+## 本机自动运行（当前生效方式）
+
+**已配置 Windows 任务计划，每 5 分钟自动扫描（仅本机，需开机）**：
+
+| 项目 | 值 |
+|---|---|
+| 任务名 | `mx-stocks-monitor` |
+| 频率 | 工作日 09:00 起每 5 分钟，持续 7 小时（脚本内部守卫交易时段 9:30–11:30 / 13:00–15:00，盘前盘后自动跳过） |
+| 入口 | `C:\waterplane\run_mx.bat`（英文路径，规避任务计划对中文路径的兼容问题） |
+| 日志 | `C:\waterplane\mx_run.log` |
+| 手动触发 | `Start-ScheduledTask -TaskName 'mx-stocks-monitor'`（PowerShell） |
+
+> ⚠️ **为什么改用本机**：GitHub Actions 的 `schedule` 定时在此账号下**从未真正触发**
+> （实测 `event=schedule` 运行数为 0；且 fork 仓库的工作流默认被 GitHub 禁用为 `disabled_fork`）。
+> 本机任务计划实测可按时自动执行（已验证 10:50:00 自动触发，rc=0）。
+
+## 云端自动运行（备用，无需本机开机）
+
+
 仓库已配置 GitHub Actions（`.github/workflows/monitor.yml`），在**交易时段自动每 5 分钟唤醒一次**；每次运行内部以 **`--loop` 模式每约 2 分钟扫描一次**（默认 3 次/运行），从而把实际筛选密度提到 ~2 分钟：
 
 - 每次云端运行 = 一次 `git pull`（取最新池）→ 循环扫描（2 分钟一次，自动守卫交易时段）→ 统一 `git commit + push` 一次，避免高频 git 冲突。
