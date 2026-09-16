@@ -117,3 +117,4 @@ python screener_monitor.py --force
 
 这样云端和两台电脑看到的是同一份累计清单。
 # test
+# rotation test
