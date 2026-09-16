@@ -1630,10 +1630,16 @@ def main():
         return
 
     if not git_sync_before():
-        # 拉取失败直接中止本轮：不 load_master、不扫描、不写盘。
-        # 防止「基于旧数据扫描 → _write_pool 把 pull 冲突残留的标记行固化进 CSV」这类污染。
-        print("[跳过] git pull 失败，本轮不执行（避免基于旧数据写盘污染观察池），下次运行自动重试")
-        return
+        # 本机运行时（LOCAL_MODE=1）git 只是可选的云端同步，网络抖动不应中断选股：
+        # 降级为「跳过同步、继续扫描」。云端（GITHUB_ACTIONS）保持原严格行为——
+        # 拉取失败即中止，防止基于旧数据扫描把冲突残留固化进 CSV。
+        if os.environ.get("LOCAL_MODE") == "1" and os.environ.get("GITHUB_ACTIONS") != "true":
+            print("[降级] git pull 失败（网络？），本机模式继续扫描（跳过同步）")
+        else:
+            # 拉取失败直接中止本轮：不 load_master、不扫描、不写盘。
+            # 防止「基于旧数据扫描 → _write_pool 把 pull 冲突残留的标记行固化进 CSV」这类污染。
+            print("[跳过] git pull 失败，本轮不执行（避免基于旧数据写盘污染观察池），下次运行自动重试")
+            return
     pool = load_master()
 
     if args.loop:
