@@ -116,5 +116,3 @@ python screener_monitor.py --force
 - 单位/家里电脑想看最新清单，随时 `git pull` 即可。
 
 这样云端和两台电脑看到的是同一份累计清单。
-# test
-# rotation test
